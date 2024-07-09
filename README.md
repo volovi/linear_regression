@@ -1,3 +1,4 @@
 # Linear Regression using Gradient Descent
 
-<img width="997" alt="linear regression" src="https://github.com/volovi/linear_regression/assets/1101288/02f5f216-1278-4597-a4c5-d38b0189689f">
+https://github.com/volovi/linear_regression/assets/1101288/94dd4c78-ac2d-431d-9a1c-68d7d56b7d6b
+

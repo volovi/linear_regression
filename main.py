@@ -9,6 +9,10 @@ M = 50
 min_learning_rate, init_learning_rate, max_learning_rate = 0.1, 0.5, 2.0
 min_epochs, init_epochs_from, init_epochs_to, max_epochs = 0, 1, 12, 15
 
+init_epochs = (init_epochs_from, init_epochs_to)
+init_epochs_pre = init_epochs_from - min_epochs
+init_epochs_post = max_epochs - init_epochs_to
+
 cycle_colors = plt.rcParams["axes.prop_cycle"].by_key()['color']
 
 
@@ -35,12 +39,12 @@ def gradient(dj_da, x):
     return dj_dw, dj_db
 
 
-def params(learning_rate, epochs_from, epochs_to):
+def params(learning_rate):
     w = np.full((N, 1), 1e-6)
     b = np.zeros((1, 1))
     p = np.empty((0, 3))
 
-    for epoch in range(epochs_to+1):
+    for epoch in range(max_epochs + 1):
         a = _x @ w + b
         p = np.vstack((p, (w.squeeze(), b.squeeze(), cost(a, _y))))
             
@@ -48,7 +52,7 @@ def params(learning_rate, epochs_from, epochs_to):
         w -= learning_rate * dj_dw
         b -= learning_rate * dj_db
 
-    return p[epochs_from:].T
+    return p.T
 
 
 def lines_data(x_min, x_max, y_min, y_max, w, b):
@@ -68,10 +72,6 @@ def limits(x_min, x_max, y_min, y_max):
     return dict(xlim=(x_min - xm, x_max + xm), ylim=(y_min - ym, y_max + ym))
 
 
-def limits1():
-    return limits(*_l)
-
-
 def limits2(w, b, j):
     i = np.argpartition(j, 1)[:2]
 
@@ -84,7 +84,7 @@ def limits2(w, b, j):
 
 
 def contours(xlim, ylim):
-    w, b = np.meshgrid(np.linspace(*xlim), np.linspace(*ylim))  
+    w, b = np.meshgrid(np.linspace(*xlim), np.linspace(*ylim))
     cs = ax2.contour(w, b, f(w, b), levels=19, linewidths=0.5)
     cl = ax2.clabel(cs, inline=True, fontsize=10)
     
@@ -92,12 +92,20 @@ def contours(xlim, ylim):
 
 
 def setup1(w, b, j):
-    ax1.set(**limits1())
+    ax1.set(**limits(*_l))
+
+    props = dict(linestyle=':', marker=(4, 1), linewidth=0.5)
+
+    l1 = ax1.plot(*np.empty((2 * init_epochs_pre, 0)), **props)
+    ls = ax1.plot(*np.c_[lines_data(*_l, w, b)].T, **props)
+    l2 = ax1.plot(*np.empty((2 * init_epochs_post, 0)), **props)
+
+    ls[np.argmin(j)].set(markersize=10.0, linestyle='-')
+    ax1.legend(ls, j.round(1), loc=2)
 
     values = ax1.scatter(_x, _y)
-    update1(w, b, j)
 
-    return values
+    return l1 + ls + l2, values
 
 
 def setup2(w, b, j):
@@ -109,43 +117,49 @@ def setup2(w, b, j):
     trail1, = ax2.plot(w, b, ':', linewidth=0.5)
 
     trail2 = ax2.scatter(w, b, zorder=2, marker=(4, 1))
-    trail2.set_color(_c)
+    trail2.set_color(np.roll(cycle_colors, -init_epochs_from))
     trail2.set_sizes((np.eye(len(j))[np.argmin(j)] * 2. + 1.) * 36.)
 
     return [cs, cl], trail1, trail2
 
 
 def update1(w, b, j):
-    ax1.set_prop_cycle(plt.cycler(c=_c))
+    ls = lines[ep_sl.val[0] : ep_sl.val[1] + 1]
 
-    for obj in ax1.lines:
-        obj.remove()
+    for line, data in zip(ls, lines_data(*_l, w, b)):
+        line.set(data=data.T, markersize=6.0, linestyle=':')
 
-    lines = ax1.plot(*np.c_[lines_data(*_l, w, b)].T, ':', marker=(4, 1), linewidth=0.5)
-    lines[np.argmin(j)].set(markersize=10.0, linestyle='-')
-    
-    ax1.legend(lines, j.round(1), loc=2)
+    ls[np.argmin(j)].set(markersize=10.0, linestyle='-')
+    ax1.legend(ls, j.round(1), loc=2)
 
 
 def update2(w, b, j):
     trail1.set_data(w, b)
 
     trail2.set_offsets(np.c_[w, b])
-    trail2.set_color(_c)
     trail2.set_sizes((np.eye(len(j))[np.argmin(j)] * 2. + 1.) * 36.)
 
 
-_v = [None] # a workaround for RangeSlider bug
-def update(val):
-    if _v[0] == val and val:
+def lr_changed(val):
+    _p[:] = params(val)
+
+    update1(*p())
+    update2(*p())
+
+
+_v = [init_epochs] # a workaround for the RangeSlider bug
+def ep_changed(val):
+    if _v[0] == val:
         return
     _v[0] = val
 
-    _p[:] = params(lr_sl.val, *ep_sl.val)
-    _c[:] = np.roll(cycle_colors, -ep_sl.val[0])
+    trail2.set_color(np.roll(cycle_colors, -val[0]))
 
-    update1(*_p)
-    update2(*_p)
+    for i, line in enumerate(lines):
+        line.set_visible(i >= val[0] and i <= val[1])
+
+    update1(*p())
+    update2(*p())
 
 
 def relim(event):
@@ -155,8 +169,8 @@ def relim(event):
     for obj in _q[1]:
         obj.remove()
 
-    ax1.set(**limits1())
-    lim = limits2(*_p)
+    ax1.set(**limits(*_l))
+    lim = limits2(*p())
     
     ax2.set(**lim)
     _q[:] = contours(**lim)
@@ -178,10 +192,8 @@ def rand(event):
 
     values.set_offsets(np.c_[_x, _y])
 
-    if lr_sl.val == init_learning_rate and ep_sl.val == (init_epochs_from, init_epochs_to):
-        update(0)
-    else:
-        reset(0)
+    lr_sl.set_val(init_learning_rate) # forced update
+    ep_sl.reset()
 
     relim(0)
 
@@ -190,8 +202,7 @@ _x, _y = make_regression(n_samples=M, n_features=N, noise=10, random_state=False
 _y = _y[:, None]
 _l = [np.min(_x), np.max(_x), np.min(_y), np.max(_y)]
 
-_p = [*params(init_learning_rate, init_epochs_from, init_epochs_to)]
-_c = np.roll(cycle_colors, -init_epochs_from)
+_p = params(init_learning_rate)
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5.7))
 
@@ -201,14 +212,11 @@ ax5 = fig.add_axes([0.6, 0.02, 0.09, 0.04])
 ax6 = fig.add_axes([0.72, 0.02, 0.09, 0.04])
 ax7 = fig.add_axes([0.84, 0.02, 0.09, 0.04])
 
-values = setup1(*_p)
-_q, trail1, trail2 = setup2(*_p)
-
 lr_sl = Slider(ax3, 'α', min_learning_rate, max_learning_rate, valinit=init_learning_rate, valstep=0.001)
-lr_sl.on_changed(update)
+lr_sl.on_changed(lr_changed)
 
-ep_sl = RangeSlider(ax4, 'epochs', min_epochs, max_epochs, valinit=(init_epochs_from, init_epochs_to), valstep=1)
-ep_sl.on_changed(update)
+ep_sl = RangeSlider(ax4, 'epochs', min_epochs, max_epochs, valinit=init_epochs, valstep=1)
+ep_sl.on_changed(ep_changed)
 
 relim_bt = Button(ax5, 'Relim')
 relim_bt.on_clicked(relim)
@@ -218,6 +226,12 @@ reset_bt.on_clicked(reset)
 
 rand_bt = Button(ax7, 'Rand')
 rand_bt.on_clicked(rand)
+
+def p():
+    return _p[:, ep_sl.val[0] : ep_sl.val[1] + 1]
+
+lines, values = setup1(*p())
+_q, trail1, trail2 = setup2(*p())
 
 plt.subplots_adjust(bottom=0.25)
 plt.show()

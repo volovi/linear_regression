@@ -14,6 +14,7 @@ init_epochs_pre = init_epochs_from - min_epochs
 init_epochs_post = max_epochs - init_epochs_to
 
 cycle_colors = plt.rcParams["axes.prop_cycle"].by_key()['color']
+marker_sizes = ((np.eye(max_epochs + 1) * 2) + 1) * 36
 
 
 # def f(w, b):
@@ -94,18 +95,19 @@ def contours(xlim, ylim):
 def setup1(w, b, j):
     ax1.set(**limits(*_l))
 
-    props = dict(linestyle=':', marker=(4, 1), linewidth=0.5)
+    lines = ax1.plot(*np.empty((2, 0, init_epochs_pre)),
+                     *np.c_[lines_data(*_l, w, b)].T,
+                     *np.empty((2, 0, init_epochs_post)),
+                     linestyle=':', marker=(4, 1), linewidth=0.5)
 
-    l1 = ax1.plot(*np.empty((2 * init_epochs_pre, 0)), **props)
-    ls = ax1.plot(*np.c_[lines_data(*_l, w, b)].T, **props)
-    l2 = ax1.plot(*np.empty((2 * init_epochs_post, 0)), **props)
+    ls = lines[init_epochs_from : init_epochs_to + 1]
 
     ls[np.argmin(j)].set(markersize=10.0, linestyle='-')
     ax1.legend(ls, j.round(1), loc=2)
 
     values = ax1.scatter(_x, _y)
 
-    return l1 + ls + l2, values
+    return lines, values
 
 
 def setup2(w, b, j):
@@ -114,13 +116,13 @@ def setup2(w, b, j):
     ax2.set(**lim) 
     cs, cl = contours(**lim)
 
-    trail1, = ax2.plot(w, b, ':', linewidth=0.5)
+    path, = ax2.plot(w, b, ':', linewidth=0.5)
+    patho = ax2.scatter(w, b, zorder=2, marker=(4, 1))
 
-    trail2 = ax2.scatter(w, b, zorder=2, marker=(4, 1))
-    trail2.set_color(np.roll(cycle_colors, -init_epochs_from))
-    trail2.set_sizes((np.eye(len(j))[np.argmin(j)] * 2. + 1.) * 36.)
+    patho.set_color(np.roll(cycle_colors, -init_epochs_from))
+    patho.set_sizes(marker_sizes[np.argmin(j)])
 
-    return [cs, cl], trail1, trail2
+    return [cs, cl], path, patho
 
 
 def update1(w, b, j):
@@ -134,10 +136,10 @@ def update1(w, b, j):
 
 
 def update2(w, b, j):
-    trail1.set_data(w, b)
+    path.set_data(w, b)
+    patho.set_offsets(np.c_[w, b])
 
-    trail2.set_offsets(np.c_[w, b])
-    trail2.set_sizes((np.eye(len(j))[np.argmin(j)] * 2. + 1.) * 36.)
+    patho.set_sizes(marker_sizes[np.argmin(j)])
 
 
 def lr_changed(val):
@@ -153,7 +155,7 @@ def ep_changed(val):
         return
     _v[0] = val
 
-    trail2.set_color(np.roll(cycle_colors, -val[0]))
+    patho.set_color(np.roll(cycle_colors, -val[0]))
 
     for i, line in enumerate(lines):
         line.set_visible(i >= val[0] and i <= val[1])
@@ -198,12 +200,6 @@ def rand(event):
     relim(0)
 
 
-_x, _y = make_regression(n_samples=M, n_features=N, noise=10, random_state=False)
-_y = _y[:, None]
-_l = [np.min(_x), np.max(_x), np.min(_y), np.max(_y)]
-
-_p = params(init_learning_rate)
-
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5.7))
 
 ax3 = fig.add_axes([0.124, 0.15, 0.777, 0.03])
@@ -227,11 +223,16 @@ reset_bt.on_clicked(reset)
 rand_bt = Button(ax7, 'Rand')
 rand_bt.on_clicked(rand)
 
-def p():
-    return _p[:, ep_sl.val[0] : ep_sl.val[1] + 1]
+_x, _y = make_regression(n_samples=M, n_features=N, noise=10, random_state=False)
+_y = _y[:, None]
+_l = [np.min(_x), np.max(_x), np.min(_y), np.max(_y)]
+
+_p = params(init_learning_rate)
+
+p = lambda: _p[:, ep_sl.val[0] : ep_sl.val[1] + 1]
 
 lines, values = setup1(*p())
-_q, trail1, trail2 = setup2(*p())
+_q, path, patho = setup2(*p())
 
 plt.subplots_adjust(bottom=0.25)
 plt.show()

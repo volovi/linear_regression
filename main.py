@@ -86,10 +86,11 @@ def limits2(w, b, j):
 
 def contours(xlim, ylim):
     w, b = np.meshgrid(np.linspace(*xlim), np.linspace(*ylim))
+
     cs = ax2.contour(w, b, f(w, b), levels=19, linewidths=0.5)
-    cl = ax2.clabel(cs, inline=True, fontsize=10)
-    
-    return cs, cl
+    ax2.clabel(cs, inline=True, fontsize=10)
+
+    return cs
 
 
 def setup1(w, b, j):
@@ -114,7 +115,7 @@ def setup2(w, b, j):
     lim = limits2(w, b, j)
     
     ax2.set(**lim) 
-    cs, cl = contours(**lim)
+    cs = contours(**lim)
 
     path, = ax2.plot(w, b, ':', linewidth=0.5)
     patho = ax2.scatter(w, b, zorder=2, marker=(4, 1))
@@ -122,7 +123,7 @@ def setup2(w, b, j):
     patho.set_color(np.roll(cycle_colors, -init_epochs_from))
     patho.set_sizes(marker_sizes[np.argmin(j)])
 
-    return [cs, cl], path, patho
+    return [cs], path, patho
 
 
 def update1(w, b, j):
@@ -165,17 +166,13 @@ def ep_changed(val):
 
 
 def relim(event):
-    for obj in _q[0].collections:
-        obj.remove()
-
-    for obj in _q[1]:
-        obj.remove()
+    _q[0].remove()
 
     ax1.set(**limits(*_l))
     lim = limits2(*p())
-    
+
     ax2.set(**lim)
-    _q[:] = contours(**lim)
+    _q[0] = contours(**lim)
 
     fig.canvas.draw_idle()
 

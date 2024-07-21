@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Slider, RangeSlider
 from sklearn.datasets import make_regression
+from collections import namedtuple
 
 N = 1
 M = 50
@@ -10,8 +11,6 @@ min_learning_rate, init_learning_rate, max_learning_rate = 0.1, 0.5, 2.0
 min_epochs, init_epochs_from, init_epochs_to, max_epochs = 0, 1, 12, 15
 
 init_epochs = (init_epochs_from, init_epochs_to)
-init_epochs_pre = init_epochs_from - min_epochs
-init_epochs_post = max_epochs - init_epochs_to
 
 cycle_colors = plt.rcParams["axes.prop_cycle"].by_key()['color']
 marker_sizes = ((np.eye(max_epochs + 1) * 2) + 1) * 36
@@ -43,26 +42,26 @@ def gradient(dj_da, x):
 def params(learning_rate):
     w = np.full((N, 1), 1e-6)
     b = np.zeros((1, 1))
-    p = np.empty((0, 3))
+    p = np.empty((3, 0))
 
     for epoch in range(max_epochs + 1):
         a = _x @ w + b
-        p = np.vstack((p, (w.squeeze(), b.squeeze(), cost(a, _y))))
-            
+        p = np.hstack((p, np.vstack((w, b, cost(a, _y)))))
+
         dj_dw, dj_db = gradient(cost_derivative(a, _y), _x)
         w -= learning_rate * dj_dw
         b -= learning_rate * dj_db
 
-    return p.T
+    return p
 
 
 def lines_data(x_min, x_max, y_min, y_max, w, b):
     xs1 = (y_min - b) / w
     xs2 = (y_max - b) / w
-    
+
     xs = np.array((np.minimum(np.maximum(x_min, xs1), np.maximum(x_min, xs2)),
-                   np.maximum(np.minimum(x_max, xs2), np.minimum(x_max, xs1))))
-    
+                   np.maximum(np.minimum(x_max, xs1), np.minimum(x_max, xs2))))
+
     return np.dstack((xs.T, (xs * w + b).T))
 
 
@@ -93,39 +92,6 @@ def contours(xlim, ylim):
     return cs
 
 
-def setup1(w, b, j):
-    ax1.set(**limits(*_l))
-
-    lines = ax1.plot(*np.empty((2, 0, init_epochs_pre)),
-                     *np.c_[lines_data(*_l, w, b)].T,
-                     *np.empty((2, 0, init_epochs_post)),
-                     linestyle=':', marker=(4, 1), linewidth=0.5)
-
-    ls = lines[init_epochs_from : init_epochs_to + 1]
-
-    ls[np.argmin(j)].set(markersize=10.0, linestyle='-')
-    ax1.legend(ls, j.round(1), loc=2)
-
-    values = ax1.scatter(_x, _y)
-
-    return lines, values
-
-
-def setup2(w, b, j):
-    lim = limits2(w, b, j)
-    
-    ax2.set(**lim) 
-    cs = contours(**lim)
-
-    path, = ax2.plot(w, b, ':', linewidth=0.5)
-    patho = ax2.scatter(w, b, zorder=2, marker=(4, 1))
-
-    patho.set_color(np.roll(cycle_colors, -init_epochs_from))
-    patho.set_sizes(marker_sizes[np.argmin(j)])
-
-    return [cs], path, patho
-
-
 def update1(w, b, j):
     ls = lines[ep_sl.val[0] : ep_sl.val[1] + 1]
 
@@ -143,8 +109,14 @@ def update2(w, b, j):
     patho.set_sizes(marker_sizes[np.argmin(j)])
 
 
+def p():
+    return _p[:, ep_sl.val[0] : ep_sl.val[1] + 1]
+
+
 def lr_changed(val):
-    _p[:] = params(val)
+    global _p
+
+    _p = params(val)
 
     update1(*p())
     update2(*p())
@@ -183,11 +155,11 @@ def reset(event):
 
 
 def rand(event):
-    x, y = make_regression(n_samples=M, n_features=N, noise=10)
-    
-    _x[:, 0] = x.squeeze()
-    _y[:, 0] = y
-    _l[:] = np.min(_x), np.max(_x), np.min(_y), np.max(_y)
+    global _x, _y, _l
+
+    _x, _y = make_regression(n_samples=M, n_features=N, noise=10)
+    _y = _y[:, None]
+    _l = [np.min(_x), np.max(_x), np.min(_y), np.max(_y)]
 
     values.set_offsets(np.c_[_x, _y])
 
@@ -205,6 +177,15 @@ ax5 = fig.add_axes([0.6, 0.02, 0.09, 0.04])
 ax6 = fig.add_axes([0.72, 0.02, 0.09, 0.04])
 ax7 = fig.add_axes([0.84, 0.02, 0.09, 0.04])
 
+lines = ax1.plot(*np.empty((2, 0, max_epochs + 1)), marker=(4, 1), linewidth=0.5)
+values = ax1.scatter([], [])
+
+path, = ax2.plot([], [], linestyle=':', linewidth=0.5)
+patho = ax2.scatter([], [], zorder=2, marker=(4, 1))
+
+patho.set_color(np.roll(cycle_colors, -init_epochs_from))
+_q = [namedtuple('DummyContourSet', 'remove')(lambda:None)]
+
 lr_sl = Slider(ax3, 'α', min_learning_rate, max_learning_rate, valinit=init_learning_rate, valstep=0.001)
 lr_sl.on_changed(lr_changed)
 
@@ -220,16 +201,7 @@ reset_bt.on_clicked(reset)
 rand_bt = Button(ax7, 'Rand')
 rand_bt.on_clicked(rand)
 
-_x, _y = make_regression(n_samples=M, n_features=N, noise=10, random_state=False)
-_y = _y[:, None]
-_l = [np.min(_x), np.max(_x), np.min(_y), np.max(_y)]
-
-_p = params(init_learning_rate)
-
-p = lambda: _p[:, ep_sl.val[0] : ep_sl.val[1] + 1]
-
-lines, values = setup1(*p())
-_q, path, patho = setup2(*p())
+rand(0)
 
 plt.subplots_adjust(bottom=0.25)
 plt.show()

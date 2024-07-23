@@ -8,9 +8,7 @@ N = 1
 M = 50
 
 min_learning_rate, init_learning_rate, max_learning_rate = 0.1, 0.5, 2.0
-min_epochs, init_epochs_from, init_epochs_to, max_epochs = 0, 1, 12, 15
-
-init_epochs = (init_epochs_from, init_epochs_to)
+min_epochs, init_epochs, max_epochs = 0, (1, 12), 15
 
 cycle_colors = plt.rcParams["axes.prop_cycle"].by_key()['color']
 marker_sizes = ((np.eye(max_epochs + 1) * 2) + 1) * 36
@@ -55,21 +53,25 @@ def params(learning_rate):
     return p
 
 
-def lines_data(x_min, x_max, y_min, y_max, w, b):
-    xs1 = (y_min - b) / w
-    xs2 = (y_max - b) / w
+def lines_data(w, b):
+    xs1 = (_ymin - b) / w
+    xs2 = (_ymax - b) / w
 
-    xs = np.array((np.minimum(np.maximum(x_min, xs1), np.maximum(x_min, xs2)),
-                   np.maximum(np.minimum(x_max, xs1), np.minimum(x_max, xs2))))
+    xs = np.array((np.minimum(np.maximum(_xmin, xs1), np.maximum(_xmin, xs2)),
+                   np.maximum(np.minimum(_xmax, xs1), np.minimum(_xmax, xs2))))
 
     return np.dstack((xs.T, (xs * w + b).T))
 
 
-def limits(x_min, x_max, y_min, y_max):
-    xm = 0.05 * (x_max - x_min)
-    ym = 0.05 * (y_max - y_min)
+def limits(xmin, xmax, ymin, ymax):
+    xm = 0.05 * (xmax - xmin)
+    ym = 0.05 * (ymax - ymin)
 
-    return dict(xlim=(x_min - xm, x_max + xm), ylim=(y_min - ym, y_max + ym))
+    return dict(xlim=(xmin - xm, xmax + xm), ylim=(ymin - ym, ymax + ym))
+
+
+def limits1():
+    return limits(_xmin, _xmax, _ymin, _ymax)
 
 
 def limits2(w, b, j):
@@ -95,7 +97,7 @@ def contours(xlim, ylim):
 def update1(w, b, j):
     ls = lines[ep_sl.val[0] : ep_sl.val[1] + 1]
 
-    for line, data in zip(ls, lines_data(*_l, w, b)):
+    for line, data in zip(ls, lines_data(w, b)):
         line.set(data=data.T, markersize=6.0, linestyle=':')
 
     ls[np.argmin(j)].set(markersize=10.0, linestyle='-')
@@ -122,16 +124,11 @@ def lr_changed(val):
     update2(*p())
 
 
-_v = [init_epochs] # a workaround for the RangeSlider bug
 def ep_changed(val):
-    if _v[0] == val:
-        return
-    _v[0] = val
-
-    patho.set_color(np.roll(cycle_colors, -val[0]))
-
     for i, line in enumerate(lines):
         line.set_visible(i >= val[0] and i <= val[1])
+
+    patho.set_color(np.roll(cycle_colors, -val[0]))
 
     update1(*p())
     update2(*p())
@@ -140,7 +137,7 @@ def ep_changed(val):
 def relim(event):
     _q[0].remove()
 
-    ax1.set(**limits(*_l))
+    ax1.set(**limits1())
     lim = limits2(*p())
 
     ax2.set(**lim)
@@ -155,11 +152,12 @@ def reset(event):
 
 
 def rand(event):
-    global _x, _y, _l
+    global _x, _y, _xmin, _xmax, _ymin, _ymax
 
     _x, _y = make_regression(n_samples=M, n_features=N, noise=10)
     _y = _y[:, None]
-    _l = [np.min(_x), np.max(_x), np.min(_y), np.max(_y)]
+
+    _xmin, _xmax, _ymin, _ymax = np.min(_x), np.max(_x), np.min(_y), np.max(_y)
 
     values.set_offsets(np.c_[_x, _y])
 
@@ -183,7 +181,7 @@ values = ax1.scatter([], [])
 path, = ax2.plot([], [], linestyle=':', linewidth=0.5)
 patho = ax2.scatter([], [], zorder=2, marker=(4, 1))
 
-patho.set_color(np.roll(cycle_colors, -init_epochs_from))
+patho.set_color(np.roll(cycle_colors, -init_epochs[0]))
 _q = [namedtuple('DummyContourSet', 'remove')(lambda:None)]
 
 lr_sl = Slider(ax3, 'α', min_learning_rate, max_learning_rate, valinit=init_learning_rate, valstep=0.001)

@@ -53,14 +53,14 @@ def params(learning_rate):
     return p
 
 
-def lines_data(w, b):
-    xs1 = (_ymin - b) / w
-    xs2 = (_ymax - b) / w
+def xydata(w, b):
+    xmin = (_ymin - b) / w
+    xmax = (_ymax - b) / w
 
-    xs = np.array((np.minimum(np.maximum(_xmin, xs1), np.maximum(_xmin, xs2)),
-                   np.maximum(np.minimum(_xmax, xs1), np.minimum(_xmax, xs2))))
+    x = np.array((np.minimum(np.maximum(_xmin, xmin), np.maximum(_xmin, xmax)),
+                  np.maximum(np.minimum(_xmax, xmax), np.minimum(_xmax, xmin))))
 
-    return np.dstack((xs.T, (xs * w + b).T))
+    return np.dstack((x.T, (x * w + b).T))
 
 
 def limits(xmin, xmax, ymin, ymax):
@@ -77,8 +77,8 @@ def limits1():
 def limits2(w, b, j):
     i = np.argpartition(j, 1)[:2]
 
-    wm = np.median(w[i])
-    bm = np.median(b[i])
+    wm = np.mean(w[i])
+    bm = np.mean(b[i])
 
     r = np.max((np.max(w) - wm, wm - np.min(w), np.max(b) - bm, bm - np.min(b)))
 
@@ -97,7 +97,7 @@ def contours(xlim, ylim):
 def update1(w, b, j):
     ls = lines[ep_sl.val[0] : ep_sl.val[1] + 1]
 
-    for line, data in zip(ls, lines_data(w, b)):
+    for line, data in zip(ls, xydata(w, b)):
         line.set(data=data.T, markersize=6.0, linestyle=':')
 
     ls[np.argmin(j)].set(markersize=10.0, linestyle='-')

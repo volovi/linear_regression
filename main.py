@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Slider, RangeSlider
 from sklearn.datasets import make_regression
-from collections import namedtuple
 
 N = 1
 M = 50
@@ -182,7 +181,7 @@ path, = ax2.plot([], [], linestyle=':', linewidth=0.5)
 patho = ax2.scatter([], [], zorder=2, marker=(4, 1))
 
 patho.set_color(np.roll(cycle_colors, -init_epochs[0]))
-_q = [namedtuple('DummyContourSet', 'remove')(lambda:None)]
+_q = [type('DummyContourSet', (), {'remove': lambda self: None})()]
 
 lr_sl = Slider(ax3, 'α', min_learning_rate, max_learning_rate, valinit=init_learning_rate, valstep=0.001)
 lr_sl.on_changed(lr_changed)
